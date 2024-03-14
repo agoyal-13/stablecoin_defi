@@ -44,7 +44,7 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_THRESHOLD = 50;
     uint256 private constant LIQUIDATION_PRECISION = 100;
 
-    uint256 private constant MIN_HEALTH_FACTOR = 1;
+    uint256 private constant MIN_HEALTH_FACTOR = 1 * PRECISION;
     uint256 private constant LIQUIDATION_BONUS_PERCENT = 10;
 
     modifier moreThanZero(uint256 _amount) {
@@ -96,10 +96,7 @@ contract DSCEngine is ReentrancyGuard {
     {
         s_userCollateralDeposited[msg.sender][_tokenCollateralAddress] += _collateralAmount;
         bool success = IERC20(_tokenCollateralAddress).transferFrom(msg.sender, address(this), _collateralAmount);
-        console.log("collateral transferred status :", success);
-        console.log("dsc engine balance after transfer--------------:", address(this).balance);
         if (!success) {
-            console.log("collateral deposited :", _collateralAmount);
             revert DSCEngine__TransferFailed();
         }
     }
@@ -129,7 +126,6 @@ contract DSCEngine is ReentrancyGuard {
         if (!minted) {
             revert DSCEngine__MintFailed();
         }
-        console.log('amount minted successfully:',_amountDscToMint);
     }
 
     function burnDSC(uint256 _amount) public moreThanZero(_amount) {
@@ -146,22 +142,17 @@ contract DSCEngine is ReentrancyGuard {
         nonReentrant
     {
         uint256 startingHealthFactor = _healthFactor(_user);
-        console.log("startingHealthFactor:--", startingHealthFactor);
         if (startingHealthFactor >= MIN_HEALTH_FACTOR) {
             revert DSCEngine__HealthFactorOk();
         }
         uint256 totalAmountFromDebtCovered = getTokensFromUsdValue(_collateralToken, _debtToRecover);
-        console.log("totalAmountFromDebtCovered:--", totalAmountFromDebtCovered);
         uint256 bonus = (totalAmountFromDebtCovered * LIQUIDATION_BONUS_PERCENT) / 100;
-        console.log("bonus:--", bonus);
         uint256 totalLiquidationValue = totalAmountFromDebtCovered + bonus;
-        console.log("totalLiquidationValue:--", totalLiquidationValue);
 
         _redeemCollateral(_user, msg.sender, _collateralToken, totalLiquidationValue);
         _burnDsc(_debtToRecover, _user, msg.sender);
 
         uint256 endingHealthFactor = _healthFactor(_user);
-        console.log("endingHealthFactor:--", endingHealthFactor);
         if (endingHealthFactor <= startingHealthFactor) {
             revert DSCEngine__HealthFactorNotImproved();
         }
@@ -197,19 +188,16 @@ contract DSCEngine is ReentrancyGuard {
 
     function _calculateHealthFactor(address _user) internal view returns (uint256) {
         (uint256 totalAmountOfDscMinted, uint256 totalCollateralValueInUsd) = _getAccountInformation(_user);
-        console.log("totalAmountOfDscMinted:", totalAmountOfDscMinted);
-        console.log("totalCollateralValueInUsd:", totalCollateralValueInUsd);
         if (totalAmountOfDscMinted == 0) {
             return type(uint256).max;
         }
         uint256 collateralAdjustedForThreshold =
-            (totalCollateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+            (totalCollateralValueInUsd * LIQUIDATION_THRESHOLD * PRECISION) / LIQUIDATION_PRECISION;
         return (collateralAdjustedForThreshold / totalAmountOfDscMinted);
     }
 
     function _revertIfHealthFactorIsBroken(address _user) internal view {
         uint256 factor = _healthFactor(_user);
-        console.log("facotr is :", factor);
         if (factor < MIN_HEALTH_FACTOR) {
             revert DSCEngine__HealthFactorIsBroken(factor);
         }
@@ -237,14 +225,12 @@ contract DSCEngine is ReentrancyGuard {
     function getTokenUsdValue(address _token, uint256 _amountOfToken) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[_token]);
         (, int256 price,,,) = priceFeed.staleCheckPriceFeedAggregatorData();
-        console.log("Price in getUsdValue from pricefeed:", uint256(price));
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * _amountOfToken) / PRECISION;
     }
 
     function getTokensFromUsdValue(address _collateralToken, uint256 _usdAmountInWei) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[_collateralToken]);
         (, int256 price,,,) = priceFeed.staleCheckPriceFeedAggregatorData();
-        console.log("price in getTokensFromUsdValue", uint256(price));
         return (_usdAmountInWei * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
     }
 
