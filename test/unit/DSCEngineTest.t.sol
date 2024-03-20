@@ -122,7 +122,7 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
         uint256 actualHealthfactor = dscEngine.getHealthFactor(USER);
         console.log("actualHealthfactor::", actualHealthfactor);
-        uint256 expectedHealthfactor = 100;
+        uint256 expectedHealthfactor = 1000e18;
         assertEq(actualHealthfactor, expectedHealthfactor);
     }
 
